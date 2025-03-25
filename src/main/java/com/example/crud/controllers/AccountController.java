@@ -1,61 +1,64 @@
 package com.example.crud.controllers;
 
 import com.example.crud.domain.account.Account;
-import com.example.crud.domain.account.RequestAccount;
-import com.example.crud.repositories.AccountRepository;
-import jakarta.transaction.Transactional;
+import com.example.crud.domain.account.CreateAccountDTO;
+import com.example.crud.domain.account.UpdateAccountDTO;
+import com.example.crud.services.AccountService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.util.UriComponentsBuilder;
 
-import java.util.Optional;
-
+import java.net.URI;
+import java.util.List;
 
 @RestController
 @RequestMapping("/account")
-public class AccountController{
+public class AccountController {
+
+    private final AccountService service;
+
     @Autowired
-    private AccountRepository repository;
+    public AccountController(AccountService service) {
+        this.service = service;
+    }
+
     @GetMapping
-    public ResponseEntity getAllAccounts(){
-        var allAccounts = repository.findAllByActiveTrue();
-        return ResponseEntity.ok(allAccounts);
+    public ResponseEntity<List<Account>> getAllAccounts() {
+        List<Account> accounts = service.getAllActiveAccounts();
+        return ResponseEntity.ok(accounts);
     }
 
     @PostMapping
-    public ResponseEntity registerAccount(@RequestBody @Valid RequestAccount data){
-        Account newAccount = new Account(data);
-        repository.save(newAccount);
-        return ResponseEntity.ok().build();
+    public ResponseEntity<Account> registerAccount(
+            @RequestBody @Valid CreateAccountDTO data,
+            UriComponentsBuilder uriBuilder
+    ) {
+        Account newAccount = service.createAccount(data);
+        URI location = uriBuilder
+                .path("/account/{id}")
+                .buildAndExpand(newAccount.getId())
+                .toUri();
+        return ResponseEntity.created(location).body(newAccount);
     }
 
-    @PutMapping
-    @Transactional
-    public ResponseEntity updateAccount(@RequestBody @Valid RequestAccount data){
-        Optional<Account> optionalAccount = repository.findById(data.id());
-        if (optionalAccount.isPresent()){
-            Account account = optionalAccount.get();
-            account.setName(data.name());
-            account.setNumber_account(data.number_account());
-            account.setAgency(data.agency());
-            return ResponseEntity.ok(account);
-        } else {
-            return ResponseEntity.notFound().build();
+    @PutMapping("/{id}")
+    public ResponseEntity<Account> updateAccount(
+            @PathVariable String id,
+            @RequestBody @Valid UpdateAccountDTO data
+    ) {
+        if (!id.equals(data.id())) {
+            return ResponseEntity.badRequest().build();
         }
+
+        Account updatedAccount = service.updateAccount(data);
+        return ResponseEntity.ok(updatedAccount);
     }
 
     @DeleteMapping("/{id}")
-    @Transactional
-    public ResponseEntity deleteAccount(@PathVariable String id){
-        Optional<Account> optionalAccount = repository.findById(id);
-        if (optionalAccount.isPresent()){
-            Account account = optionalAccount.get();
-            account.setActive(false);
-            return ResponseEntity.noContent().build();
-        } else {
-            return ResponseEntity.notFound().build();
-        }
+    public ResponseEntity<Void> deleteAccount(@PathVariable String id) {
+        service.deleteAccount(id);
+        return ResponseEntity.noContent().build();
     }
-
 }
